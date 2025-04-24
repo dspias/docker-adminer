@@ -1,23 +1,47 @@
 <?php
+
 namespace docker {
-	function adminer_object() {
+	function adminer_object()
+	{
 		/**
-		 * Prefills the “Server” field with the ADMINER_DEFAULT_SERVER environment variable.
+		 * Prefills login form fields with environment variables.
 		 */
-		final class DefaultServerPlugin extends \Adminer\Plugin {
+		final class DefaultLoginPlugin extends \Adminer\Plugin
+		{
 			public function __construct(
 				private \Adminer\Adminer $adminer
-			) { }
+			) {}
 
-			public function loginFormField(...$args) {
+			public function loginFormField(...$args)
+			{
 				return (function (...$args) {
 					$field = $this->loginFormField(...$args);
-		
-					return \str_replace(
-						'name="auth[server]" value="" title="hostname[:port]"',
-						\sprintf('name="auth[server]" value="%s" title="hostname[:port]"', ($_ENV['ADMINER_DEFAULT_SERVER'] ?: 'db')),
-						$field,
-					);
+					$name = $args[0] ?? '';
+
+					$defaults = [
+						'driver' => $_ENV['ADMINER_DEFAULT_DRIVER'] ?? 'server',
+						'server' => $_ENV['ADMINER_DEFAULT_SERVER'] ?? 'mysql',
+						'username' => $_ENV['ADMINER_DEFAULT_USERNAME'] ?? '',
+						'password' => $_ENV['ADMINER_DEFAULT_PASSWORD'] ?? '',
+						'db' => $_ENV['ADMINER_DEFAULT_DB'] ?? '',
+					];
+
+					if ($name === 'driver') {
+						$field = preg_replace(
+							'/<option value="' . preg_quote($defaults['driver'], '/') . '"/',
+							'<option value="' . $defaults['driver'] . '" selected',
+							$field
+						);
+					} elseif (isset($defaults[$name])) {
+						$value = htmlspecialchars($defaults[$name]);
+						$field = str_replace(
+							'name="auth[' . $name . ']" value=""',
+							'name="auth[' . $name . ']" value="' . $value . '"',
+							$field
+						);
+					}
+
+					return $field;
 				})->call($this->adminer, ...$args);
 			}
 		}
@@ -32,9 +56,9 @@ namespace docker {
 		(function () {
 			$last = &$this->hooks['loginFormField'][\array_key_last($this->hooks['loginFormField'])];
 			if ($last instanceof \Adminer\Adminer) {
-				$defaultServerPlugin = new DefaultServerPlugin($last);
-				$this->plugins[] = $defaultServerPlugin;
-				$last = $defaultServerPlugin;
+				$defaultLoginPlugin = new DefaultLoginPlugin($last);
+				$this->plugins[] = $defaultLoginPlugin;
+				$last = $defaultLoginPlugin;
 			}
 		})->call($adminer);
 
@@ -49,7 +73,8 @@ namespace {
 		exit;
 	}
 
-	function adminer_object() {
+	function adminer_object()
+	{
 		return \docker\adminer_object();
 	}
 
